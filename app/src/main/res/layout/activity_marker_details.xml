@@ -7,20 +7,20 @@
     tools:context=".MarkerDetailsActivity">
 
     <TextView
-        android:id="@+id/title"
+        android:id="@+id/titleDetail"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
         android:layout_marginTop="116dp"
         android:textColor="#ff000000"
         android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/snippet"
+        app:layout_constraintBottom_toTopOf="@+id/snippetDetail"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
-        android:id="@+id/snippet"
+        android:id="@+id/snippetDetail"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="138dp"

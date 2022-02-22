@@ -25,7 +25,8 @@
         android:theme="@style/AppTheme">
         <activity
             android:name=".MarkerDetailsActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:parentActivityName=".MapsActivityCurrentPlace"/>
 
         <meta-data
             android:name="com.google.android.gms.version"

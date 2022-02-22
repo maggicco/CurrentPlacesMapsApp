@@ -1,17 +1,32 @@
 package com.maggicco.mapsapp;
 
 
+import android.Manifest;
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
 
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
@@ -19,12 +34,15 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
@@ -35,11 +53,14 @@ import com.google.android.gms.tasks.Task;
 import com.google.android.libraries.places.api.Places;
 import com.google.android.libraries.places.api.model.Place;
 import com.google.android.libraries.places.api.model.PlaceLikelihood;
+import com.google.android.libraries.places.api.net.FetchPlaceRequest;
 import com.google.android.libraries.places.api.net.FindCurrentPlaceRequest;
 import com.google.android.libraries.places.api.net.FindCurrentPlaceResponse;
 import com.google.android.libraries.places.api.net.PlacesClient;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -58,9 +79,9 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
     // The entry point to the Fused Location Provider.
     private FusedLocationProviderClient fusedLocationProviderClient;
 
-    // A default location (Sydney, Australia) and default zoom to use when location permission is
+    // A default location (Paris, France) and default zoom to use when location permission is
     // not granted.
-    private final LatLng defaultLocation = new LatLng(-33.8523341, 151.2106085);
+    private final LatLng defaultLocation = new LatLng(-48.51529776, 2.20564504);
     private static final int DEFAULT_ZOOM = 15;
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
     private boolean locationPermissionGranted;
@@ -73,7 +94,6 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
     // [START maps_current_place_state_keys]
     private static final String KEY_CAMERA_POSITION = "camera_position";
     private static final String KEY_LOCATION = "location";
-    // [END maps_current_place_state_keys]
 
     // Used for selecting the current place.
     private static final int M_MAX_ENTRIES = 5;
@@ -82,11 +102,12 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
     private List[] likelyPlaceAttributions;
     private LatLng[] likelyPlaceLatLngs;
 
-    // [START maps_current_place_on_create]
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // [START_EXCLUDE silent]
+        // [START maps_current_place_on_create_save_instance_state]
         // Retrieve location and camera position from saved instance state.
         if (savedInstanceState != null) {
             lastKnownLocation = savedInstanceState.getParcelable(KEY_LOCATION);
@@ -95,6 +116,8 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
 
         // Retrieve the content view that renders the map.
         setContentView(R.layout.activity_maps);
+
+        // [START_EXCLUDE silent]
         // Construct a PlacesClient
         Places.initialize(getApplicationContext(), BuildConfig.MAPS_API_KEY);
         placesClient = Places.createClient(this);
@@ -103,10 +126,10 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
         fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
 
         // Build the map.
+        // [START maps_current_place_map_fragment]
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
-
     }
 
     /**
@@ -123,7 +146,6 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
 
     /**
      * Sets up the options menu.
-     *
      * @param menu The options menu.
      * @return Boolean.
      */
@@ -135,10 +157,10 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
 
     /**
      * Handles a click on the menu option to get a place.
-     *
      * @param item The menu item to handle.
      * @return Boolean.
      */
+    // [START maps_current_place_on_options_item_selected]
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == R.id.option_get_place) {
@@ -153,7 +175,6 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
      */
     @Override
     public void onMapReady(GoogleMap map) {
-
         this.map = map;
 
         // Use a custom info window adapter to handle multiple lines of text in the
@@ -224,7 +245,7 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
                     }
                 });
             }
-        } catch (SecurityException e) {
+        } catch (SecurityException e)  {
             Log.e("Exception: %s", e.getMessage(), e);
         }
     }
@@ -278,10 +299,61 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
         if (map == null) {
             return;
         }
+        if(locationPermissionGranted){
+
+            // Use fields to define the data types to return.
+            //List<Place.Field> placeFields = Collections.singletonList(Place.Field.NAME);
+            List<Place.Field> placeFields = Arrays.asList(Place.Field.NAME,Place.Field.TYPES, Place.Field.ID,
+                    Place.Field.LAT_LNG);
+
+            // Use the builder to create a FindCurrentPlaceRequest.
+            FindCurrentPlaceRequest placeRequest = FindCurrentPlaceRequest.builder(placeFields).build();
+
+            // Call findCurrentPlace and handle the response (first check that the user has granted permission).
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                Task<FindCurrentPlaceResponse> placeResponse = placesClient.findCurrentPlace(placeRequest);
+                placeResponse.addOnCompleteListener(task -> {
+                    if (task.isSuccessful()){
+                        FindCurrentPlaceResponse response = task.getResult();
+                        for (PlaceLikelihood placeLikelihood : response.getPlaceLikelihoods()) {
+
+                            if (placeLikelihood.getPlace().getTypes() != null &&
+                                    (placeLikelihood.getPlace().getTypes().contains(Place.Type.RESTAURANT)
+                                            || placeLikelihood.getPlace().getTypes().contains(Place.Type.BAR) ||
+                                            placeLikelihood.getPlace().getTypes().contains(Place.Type.MEAL_TAKEAWAY))) {
+
+                                    Log.i(TAG, String.format("Place '%s' has likelihood: %f",
+                                            placeLikelihood.getPlace().getName(),
+                                            placeLikelihood.getLikelihood()));
+
+                                    map.addMarker(new MarkerOptions()
+                                            .position(placeLikelihood.getPlace().getLatLng())
+                                            .title((String) placeLikelihood.getPlace().getName())
+                                            .snippet((String)
+                                                    placeLikelihood.getPlace().getPhoneNumber()));
+
+
+                            }
+                        }
+                    } else {
+                        Exception exception = task.getException();
+                        if (exception instanceof ApiException) {
+                            ApiException apiException = (ApiException) exception;
+                            Log.e(TAG, "Place not found: " + apiException.getStatusCode());
+                        }
+                    }
+                });
+            } else {
+                // A local method to request required permissions;
+                // See https://developer.android.com/training/permissions/requesting
+                getLocationPermission();
+            }
+
+        }
 
         if (locationPermissionGranted) {
             // Use fields to define the data types to return.
-            List<Place.Field> placeFields = Arrays.asList(Place.Field.TYPES, Place.Field.NAME, Place.Field.ADDRESS,
+            List<Place.Field> placeFields = Arrays.asList(Place.Field.NAME, Place.Field.ADDRESS,
                     Place.Field.LAT_LNG);
 
             // Use the builder to create a FindCurrentPlaceRequest.
@@ -290,9 +362,10 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
 
             // Get the likely places - that is, the businesses and other points of interest that
             // are the best match for the device's current location.
-            @SuppressWarnings("MissingPermission") final Task<FindCurrentPlaceResponse> placeResult =
+            @SuppressWarnings("MissingPermission") final
+            Task<FindCurrentPlaceResponse> placeResult =
                     placesClient.findCurrentPlace(request);
-            placeResult.addOnCompleteListener(new OnCompleteListener<FindCurrentPlaceResponse>() {
+            placeResult.addOnCompleteListener (new OnCompleteListener<FindCurrentPlaceResponse>() {
                 @Override
                 public void onComplete(@NonNull Task<FindCurrentPlaceResponse> task) {
                     if (task.isSuccessful() && task.getResult() != null) {
@@ -329,10 +402,8 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
                         // Show a dialog offering the user the list of likely places, and add a
                         // marker at the selected place.
                         MapsActivityCurrentPlace.this.openPlacesDialog();
-
-
-
-                    } else {
+                    }
+                    else {
                         Log.e(TAG, "Exception: %s", task.getException());
                     }
                 }
@@ -404,9 +475,354 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
                 lastKnownLocation = null;
                 getLocationPermission();
             }
-        } catch (SecurityException e) {
+        } catch (SecurityException e)  {
             Log.e("Exception: %s", e.getMessage());
         }
     }
 }
 
+//
+//package com.maggicco.go4lunch.ui;
+//
+//        import androidx.annotation.NonNull;
+//        import androidx.annotation.Nullable;
+//        import androidx.core.app.ActivityCompat;
+//        import androidx.core.content.ContextCompat;
+//        import androidx.fragment.app.Fragment;
+//
+//        import android.Manifest;
+//        import android.annotation.SuppressLint;
+//        import android.app.Activity;
+//        import android.content.Context;
+//        import android.content.pm.PackageManager;
+//        import android.graphics.Bitmap;
+//        import android.location.Location;
+//        import android.location.LocationListener;
+//        import android.location.LocationManager;
+//        import android.os.Bundle;
+//        import android.view.LayoutInflater;
+//        import android.view.Menu;
+//        import android.view.MenuInflater;
+//        import android.view.View;
+//        import android.view.ViewGroup;
+//        import android.widget.SearchView;
+//        import android.widget.Toast;
+//
+//        import com.google.android.gms.location.FusedLocationProviderClient;
+//        import com.google.android.gms.location.LocationServices;
+//        import com.google.android.gms.maps.CameraUpdateFactory;
+//        import com.google.android.gms.maps.GoogleMap;
+//        import com.google.android.gms.maps.MapView;
+//        import com.google.android.gms.maps.OnMapReadyCallback;
+//        import com.google.android.gms.maps.SupportMapFragment;
+//        import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+//        import com.google.android.gms.maps.model.LatLng;
+//        import com.google.android.gms.maps.model.MarkerOptions;
+//        import com.google.android.libraries.places.api.Places;
+//        import com.google.android.libraries.places.api.model.Place;
+//        import com.google.android.libraries.places.api.model.PlaceLikelihood;
+//        import com.google.android.libraries.places.api.net.FetchPlaceRequest;
+//        import com.google.android.libraries.places.api.net.FindCurrentPlaceRequest;
+//        import com.google.android.libraries.places.api.net.FindCurrentPlaceResponse;
+//        import com.google.android.libraries.places.api.net.PlacesClient;
+//        import com.maggicco.go4lunch.BuildConfig;
+//        import com.maggicco.go4lunch.R;
+//
+//        import org.jetbrains.annotations.NotNull;
+//
+//        import java.util.ArrayList;
+//        import java.util.Arrays;
+//        import java.util.List;
+//        import java.util.Objects;
+//
+//public class MapsViewFragment extends Fragment implements OnMapReadyCallback{
+//
+//    private static final int LOCATION_MIN_UPDATE_TIME = 10;
+//    private static final int LOCATION_MIN_UPDATE_DISTANCE = 1000;
+//    private Location location = null;
+//    private GoogleMap googleMap;
+//    private LocationManager locationManager;
+//    private PlacesClient placesClient;
+//    private MapView mapView;
+//    private List<String> idList;
+//    private Activity activity;
+//    private FusedLocationProviderClient fusedLocationProviderClient;
+//    private boolean locationPermissionGranted;
+//    private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
+//
+//
+//    private List<String> userList;
+//    private List<Place> placeList;
+//
+//    public MapsViewFragment(){
+//
+//    }
+//
+//    @Nullable
+//    @Override
+//    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+//        View view = inflater.inflate(R.layout.fragment_maps_view, container, false);
+//        setHasOptionsMenu(true);
+//        return view;
+//    }
+//
+//    @Override
+//    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+//        super.onViewCreated(view, savedInstanceState);
+//        ((LoggedInActivity)getActivity()).setToolbarNavigation();
+//        ((LoggedInActivity) getActivity()).getSupportActionBar().setTitle("I'm hungry");
+//        SupportMapFragment mapFragment = (SupportMapFragment) getChildFragmentManager().findFragmentById(R.id.map);
+//        mapFragment.getMapAsync(this);
+//        locationManager = (LocationManager) getActivity().getSystemService(Context.LOCATION_SERVICE);
+//        activity = getActivity();
+//        idList = new ArrayList<>();
+//        placeList = new ArrayList<>();
+//        //initMapAndPlaces();
+//        //initView(savedInstanceState);
+//
+//    }
+//
+//    @Override
+//    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+//        super.onCreateOptionsMenu(menu, inflater);
+//        inflater.inflate(R.menu.search_menu, menu);
+//    }
+//
+//
+//    @Override
+//    public void onMapReady(GoogleMap googleMap) {
+//        this.googleMap = googleMap;
+//
+//        initMap();
+//        getCurrentLocation();
+//
+//        fetchPlacesAroundUser();
+//        addMarkerOnMap();
+//
+//
+//
+//    }
+//
+//
+//    private LocationListener locationListener = new LocationListener() {
+//        @Override
+//        public void onLocationChanged(Location location) {
+//            drawMarker(location, getText(R.string.i_am_here).toString());
+//            locationManager.removeUpdates(locationListener);
+//        }
+//
+//        @Override
+//        public void onStatusChanged(String s, int i, Bundle bundle) {
+//
+//        }
+//
+//        @Override
+//        public void onProviderEnabled(String s) {
+//
+//        }
+//
+//        @Override
+//        public void onProviderDisabled(String s) {
+//
+//        }
+//    };
+//
+//
+//
+//    /**
+//     * Init the map's UI settings based on whether the user has granted location permission.
+//     */
+//    private void initMap() {
+//        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+//            if (googleMap != null) {
+//                googleMap.setMyLocationEnabled(true);
+//                googleMap.getUiSettings().setMyLocationButtonEnabled(true);
+//                googleMap.getUiSettings().setAllGesturesEnabled(true);
+//                googleMap.getUiSettings().setZoomControlsEnabled(true);
+//
+//            }
+//        } else {
+//            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+//                ActivityCompat.requestPermissions(getActivity(), new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 12);
+//            }
+//            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+//                ActivityCompat.requestPermissions(getActivity(), new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 13);
+//            }
+//        }
+//    }
+//    /**
+//     * Prompts the user for permission to use the device location.
+//     */
+//    private void getLocationPermission() {
+//        /*
+//         * Request location permission, so that we can get the location of the
+//         * device. The result of the permission request is handled by a callback,
+//         * onRequestPermissionsResult.
+//         */
+//        if (ContextCompat.checkSelfPermission(this.getContext(),
+//                android.Manifest.permission.ACCESS_FINE_LOCATION)
+//                == PackageManager.PERMISSION_GRANTED) {
+//            locationPermissionGranted = true;
+//
+//        } else {
+//            ActivityCompat.requestPermissions(this.getActivity(),
+//                    new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION},
+//                    PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
+//        }
+//    }
+//
+//
+//    private void getCurrentLocation() {
+//        if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+//            boolean isGPSEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+//            boolean isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+//            if (!isGPSEnabled && !isNetworkEnabled) {
+//                Toast.makeText(getContext(), "GPS or Network problem!", Toast.LENGTH_LONG).show();
+//            } else {
+//                location = null;
+//                if (isGPSEnabled) {
+//                    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, LOCATION_MIN_UPDATE_TIME, LOCATION_MIN_UPDATE_DISTANCE, locationListener);
+//                    location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+//                }
+//                if (isNetworkEnabled) {
+//                    locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, LOCATION_MIN_UPDATE_TIME, LOCATION_MIN_UPDATE_DISTANCE, locationListener);
+//                    location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+//                }
+//                if (location != null) {
+//                    drawMarker(location, getText(R.string.i_am_here).toString());
+//                }
+//            }
+//        } else {
+//            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+//                ActivityCompat.requestPermissions(getActivity(), new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 12);
+//            }
+//            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+//                ActivityCompat.requestPermissions(getActivity(), new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 13);
+//            }
+//        }
+//
+//    }
+//
+//    /**
+//     * Fetches places around the user's location into GoogleMaps server
+//     */
+//    @SuppressLint("MissingPermission")
+//    private void fetchPlacesAroundUser() {
+////        Defines witch fields we want in the query's response.
+//        List<Place.Field> fields = Arrays.asList(Place.Field.TYPES, Place.Field.ID);
+////        Creates the request with the defined fields.
+//        FindCurrentPlaceRequest placeRequest = FindCurrentPlaceRequest.builder(fields).build();
+////        Requests GoogleMap's server to fetch places around user
+//        placesClient.findCurrentPlace(placeRequest).addOnCompleteListener(task -> {
+//            if (task.isSuccessful() && task.getResult() != null) {
+//                FindCurrentPlaceResponse response = task.getResult();
+//                for (PlaceLikelihood placeLikelihood : response.getPlaceLikelihoods()) {
+////                        Verifies if the place's type corresponding to restaurants.
+//                    if (placeLikelihood.getPlace().getTypes() != null &&
+//                            (placeLikelihood.getPlace().getTypes().contains(Place.Type.RESTAURANT)
+//                                    || placeLikelihood.getPlace().getTypes().contains(Place.Type.BAR) ||
+//                                    placeLikelihood.getPlace().getTypes().contains(Place.Type.MEAL_TAKEAWAY))) {
+////                        Adds each place's id in a list to pass it to HomeActivity
+//                        idList.add(placeLikelihood.getPlace().getId());
+////                        Requests details for each place corresponding to wanted types.
+//                        fetchDetailsAboutRestaurants(placeLikelihood.getPlace().getId());
+//                    }
+//                }
+////                Sends the mIdList to HomeActivity for create a restaurant list into RestaurantFragment.
+//                //mListener.onFragmentInteraction(idList);
+//            }
+//        });
+//    }
+//
+//    /**
+//     * Fetches place's details according to the place's Id passed in argument.
+//     *
+//     * @param placeId The place's id that we want details.
+//     */
+//    private void fetchDetailsAboutRestaurants(String placeId) {
+////        Defines witch fields we want in the query's response.
+//        List<Place.Field> fields = Arrays.asList(Place.Field.ID,Place.Field.NAME, Place.Field.LAT_LNG, Place.Field.ADDRESS,
+//                Place.Field.ADDRESS_COMPONENTS, Place.Field.PHONE_NUMBER, Place.Field.WEBSITE_URI,
+//                Place.Field.OPENING_HOURS, Place.Field.RATING);
+////        Creates the request with the defined fields about the given place.
+//        FetchPlaceRequest placeRequest = FetchPlaceRequest.builder(placeId, fields).build();
+////        Requests GoogleMap's server to fetch place's details.
+//        placesClient.fetchPlace(placeRequest).addOnCompleteListener(task -> {
+//            if (task.isSuccessful() && task.getResult() != null) {
+//                Place place = (task.getResult()).getPlace();
+//                placeList.add(place);
+//                //saveRestaurantInFirestore(placeId, place);
+//            }
+//            if (placeList.size() == idList.size())
+//                addMarkerOnMap();
+//        });
+//    }
+//
+////    /**
+////     * Fetches place's details according to the place's Id passed in argument.
+////     *
+////     * @param placeId The place's id that we want details.
+////     */
+////    private void fetchDetailsAboutRestaurants(String placeId) {
+//////        Defines witch fields we want in the query's response.
+////        List<Place.Field> fields = Arrays.asList(Place.Field.ID,Place.Field.NAME, Place.Field.LAT_LNG, Place.Field.ADDRESS,
+////                Place.Field.ADDRESS_COMPONENTS, Place.Field.PHONE_NUMBER, Place.Field.WEBSITE_URI,
+////                Place.Field.OPENING_HOURS, Place.Field.RATING);
+//////        Creates the request with the defined fields about the given place.
+////        FetchPlaceRequest placeRequest = FetchPlaceRequest.builder(placeId, fields).build();
+//////        Requests GoogleMap's server to fetch place's details.
+////        placesClient.fetchPlace(placeRequest).addOnCompleteListener(task -> {
+////            if (task.isSuccessful() && task.getResult() != null) {
+////                Place place = (task.getResult()).getPlace();
+////                placeList.add(place);
+////
+////            }
+////            if placeList.size() == idList.size())
+////                addMarkerOnMap();
+////        });
+////    }
+//
+//
+//    /**
+//     * Adds a marker on map according to the place's location and the place's name.
+//     */
+//    private void addMarkerOnMap() {
+//        if(googleMap != null)
+//            googleMap.clear();
+//        if (placeList != null && ! placeList.isEmpty()) {
+//            for (Place place : placeList) {
+//                int count = 0;
+////                for (User user : mUserList) {
+////                    if (user.getRestaurantId() != null && user.getRestaurantId().equals(place.getId())) {
+////                        count++;
+////                    }
+////                }
+//                if (place.getLatLng() != null) {
+//                    if (count > 0)
+//                        googleMap.addMarker(new MarkerOptions().position(place.getLatLng()).snippet(place.getId())
+//                                .title(place.getName()).icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_marker_location_red_on_24)));
+////                    else
+////                        googleMap.addMarker(new MarkerOptions().position(place.getLatLng()).snippet(place.getId())
+////                                .title(place.getName()).icon(BitmapDescriptorFactory.fromBitmap(mBitmapOrange)));
+//                }
+//            }
+//        }
+//    }
+//
+//    private void drawMarker(Location location, String title) {
+//        if (this.googleMap != null) {
+//            googleMap.clear();
+//            LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
+//            MarkerOptions markerOptions = new MarkerOptions();
+//            markerOptions.position(latLng);
+//            markerOptions.title(title);
+//            markerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
+//            googleMap.addMarker(markerOptions);
+//            googleMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
+//            googleMap.animateCamera(CameraUpdateFactory.zoomTo(12));
+//        }
+//    }
+//
+//
+//
+//}
