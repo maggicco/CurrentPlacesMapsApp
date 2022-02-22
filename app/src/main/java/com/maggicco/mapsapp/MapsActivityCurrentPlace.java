@@ -209,6 +209,20 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
             }
         });
 
+        map.setOnMarkerClickListener(marker -> {
+            if (marker.getTitle().equals(marker.getTag())){
+                marker.setTag(null);
+                Intent intent = new Intent(this, MarkerDetailsActivity.class);
+                intent.putExtra("RESTAURANT_NAME", marker.getTitle());
+                intent.putExtra("RESTAURANT_ID" ,marker.getSnippet());
+                startActivity(intent);
+            } else{
+                marker.showInfoWindow();
+                marker.setTag(marker.getTitle());
+            }
+            return true;
+        });
+
         // Prompt the user for permission.
         getLocationPermission();
 
