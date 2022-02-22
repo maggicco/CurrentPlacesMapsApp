@@ -45,6 +45,7 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
@@ -101,6 +102,7 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
     private String[] likelyPlaceAddresses;
     private List[] likelyPlaceAttributions;
     private LatLng[] likelyPlaceLatLngs;
+    Activity activity;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -173,9 +175,13 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
      * Manipulates the map when it's available.
      * This callback is triggered when the map is ready to be used.
      */
+    @SuppressLint("ResourceType")
     @Override
     public void onMapReady(GoogleMap map) {
         this.map = map;
+
+        //        Sets mGoogleMap's style without poi.
+        map.setMapStyle(MapStyleOptions.loadRawResourceStyle(this, R.raw.json_poi_style));
 
         // Use a custom info window adapter to handle multiple lines of text in the
         // info window contents.
@@ -322,15 +328,15 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
                                             || placeLikelihood.getPlace().getTypes().contains(Place.Type.BAR) ||
                                             placeLikelihood.getPlace().getTypes().contains(Place.Type.MEAL_TAKEAWAY))) {
 
-                                    Log.i(TAG, String.format("Place '%s' has likelihood: %f",
-                                            placeLikelihood.getPlace().getName(),
-                                            placeLikelihood.getLikelihood()));
+                                Log.i(TAG, String.format("Place '%s' has likelihood: %f",
+                                        placeLikelihood.getPlace().getName(),
+                                        placeLikelihood.getLikelihood()));
 
-                                    map.addMarker(new MarkerOptions()
-                                            .position(placeLikelihood.getPlace().getLatLng())
-                                            .title((String) placeLikelihood.getPlace().getName())
-                                            .snippet((String)
-                                                    placeLikelihood.getPlace().getPhoneNumber()));
+                                map.addMarker(new MarkerOptions()
+                                        .position(placeLikelihood.getPlace().getLatLng())
+                                        .title((String) placeLikelihood.getPlace().getName())
+                                        .snippet((String)
+                                                placeLikelihood.getPlace().getPhoneNumber()));
 
 
                             }
