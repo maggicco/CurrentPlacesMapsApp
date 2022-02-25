@@ -184,7 +184,7 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
      * Manipulates the map when it's available.
      * This callback is triggered when the map is ready to be used.
      */
-    @SuppressLint("ResourceType")
+    @SuppressLint({"ResourceType", "PotentialBehaviorOverride"})
     @Override
     public void onMapReady(GoogleMap map) {
         this.map = map;
@@ -244,7 +244,7 @@ public class MapsActivityCurrentPlace extends AppCompatActivity
 
         // Prompt the user for permission.
         getLocationPermission();
-        updateLocationUI();
+        //updateLocationUI();
         showCurrentPlace();
 
         // Turn on the My Location layer and the related control on the map.
